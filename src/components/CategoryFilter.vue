@@ -62,7 +62,8 @@ const totalItems = () => props.categories.reduce((sum, c) => sum + c.itemCount, 
 
 .filter-header h3 {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--color-text-secondary);
@@ -71,9 +72,12 @@ const totalItems = () => props.categories.reduce((sum, c) => sum + c.itemCount, 
 .read-badge {
   font-size: 0.75rem;
   color: var(--color-text-secondary);
-  background: var(--color-bg);
-  padding: 2px 8px;
-  border-radius: 10px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  padding: 2px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--glass-border);
 }
 
 ul {
@@ -87,9 +91,9 @@ li {
   justify-content: space-between;
   align-items: center;
   padding: 10px 12px;
-  border-radius: 6px;
+  border-radius: var(--glass-radius-xs);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.2s;
   font-size: 0.9rem;
 }
 
@@ -105,8 +109,11 @@ li.active {
 .cat-count {
   font-size: 0.8rem;
   color: var(--color-text-secondary);
-  background: var(--color-bg);
-  padding: 1px 8px;
-  border-radius: 10px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  padding: 1px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--glass-border);
 }
 </style>

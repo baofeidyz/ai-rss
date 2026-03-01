@@ -4,6 +4,7 @@ import CategoryFilter from './components/CategoryFilter.vue'
 import FeedList from './components/FeedList.vue'
 import LanguageSelector from './components/LanguageSelector.vue'
 import ArticleViewer from './components/ArticleViewer.vue'
+import { useReadStatus } from './composables/useReadStatus'
 
 interface FeedItem {
   title: string
@@ -39,6 +40,8 @@ const selectedArticle = ref<FeedItem | null>(null)
 const articleList = ref<FeedItem[]>([])
 const articleIndex = ref(0)
 
+const { markAsRead } = useReadStatus()
+
 onMounted(async () => {
   window.addEventListener('popstate', onPopState)
   try {
@@ -66,12 +69,18 @@ function handleSelectArticle(item: FeedItem, index: number, list: FeedItem[]) {
   articleIndex.value = index
   readingMode.value = true
   sidebarOpen.value = false
+  // Auto mark as read when opening article
+  markAsRead(item.link)
   history.pushState({ reading: true }, '')
 }
 
 function handleNavigate(index: number) {
   articleIndex.value = index
   selectedArticle.value = articleList.value[index]
+  // Auto mark as read when navigating to article
+  if (selectedArticle.value) {
+    markAsRead(selectedArticle.value.link)
+  }
 }
 
 function exitReadingMode() {
@@ -91,7 +100,11 @@ function onPopState() {
 <template>
   <div class="app">
     <header class="app-header">
-      <button class="menu-btn" @click="toggleSidebar">☰</button>
+      <button class="menu-btn" @click="toggleSidebar">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
       <h1>AI NEWS</h1>
       <a class="author-link" href="https://github.com/baofeidyz/ai-rss" target="_blank" rel="noopener">by baofeidyz</a>
       <div class="header-right">
@@ -156,17 +169,21 @@ function onPopState() {
   align-items: center;
   gap: 12px;
   padding: 12px 20px;
-  background: var(--color-bg-secondary);
-  border-bottom: 1px solid var(--color-border);
+  background: var(--glass-bg-heavy);
+  backdrop-filter: blur(var(--glass-blur-heavy));
+  -webkit-backdrop-filter: blur(var(--glass-blur-heavy));
+  border-bottom: 1px solid var(--glass-border);
   position: sticky;
   top: 0;
   z-index: 100;
 }
 
 .app-header h1 {
-  font-size: 1.25rem;
+  font-size: 1.2rem;
+  font-weight: 700;
   margin: 0;
   white-space: nowrap;
+  letter-spacing: -0.02em;
 }
 
 .author-link {
@@ -178,7 +195,6 @@ function onPopState() {
 
 .author-link:hover {
   color: var(--color-accent);
-  text-decoration: underline;
 }
 
 .header-right {
@@ -196,13 +212,20 @@ function onPopState() {
 
 .menu-btn {
   display: none;
-  background: none;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius-xs);
   font-size: 1.25rem;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 6px 8px;
   color: var(--color-text);
+  transition: background 0.2s;
+}
+
+.menu-btn:hover {
+  background: var(--color-hover);
 }
 
 .app-body {
@@ -215,7 +238,9 @@ function onPopState() {
   width: 260px;
   flex-shrink: 0;
   border-right: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   height: calc(100vh - 53px);
   position: sticky;
   top: 53px;
@@ -252,7 +277,9 @@ function onPopState() {
   max-width: 300px;
   padding: 0;
   border-right: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 /* Viewer area */
@@ -281,11 +308,14 @@ function onPopState() {
 
 @media (max-width: 768px) {
   .menu-btn {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .fetch-time {
-    display: none;
+    display: block;
+    font-size: 0.7rem;
   }
 
   .sidebar {
@@ -317,7 +347,7 @@ function onPopState() {
     position: fixed;
     inset: 0;
     top: 53px;
-    background: rgba(0, 0, 0, 0.4);
+    background: rgba(0, 0, 0, 0.3);
     z-index: 199;
     opacity: 0;
     pointer-events: none;

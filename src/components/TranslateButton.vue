@@ -58,12 +58,15 @@ async function handleTranslate(e: Event) {
 
 .translate-btn {
   font-size: 0.75rem;
-  padding: 2px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  background: none;
+  padding: 3px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   color: var(--color-text-secondary);
   cursor: pointer;
+  transition: background 0.2s;
 }
 
 .translate-btn:hover {
@@ -73,9 +76,11 @@ async function handleTranslate(e: Event) {
 .translation {
   margin-top: 8px;
   padding: 10px 12px;
-  background: var(--color-bg-secondary);
-  border-radius: 6px;
-  border: 1px solid var(--color-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-radius: var(--glass-radius-xs);
+  border: 1px solid var(--glass-border);
 }
 
 .translated-title {

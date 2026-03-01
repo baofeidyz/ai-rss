@@ -248,16 +248,19 @@ watch(() => props.activeCategory, () => {
 
 .source-filter-btn {
   font-size: 0.85rem;
-  padding: 4px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  background: var(--color-bg);
+  padding: 6px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius-xs);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   color: var(--color-text);
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 4px;
   white-space: nowrap;
+  transition: background 0.2s;
 }
 
 .source-filter-btn.active {
@@ -275,10 +278,12 @@ watch(() => props.activeCategory, () => {
   left: 0;
   min-width: 220px;
   max-height: 320px;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  background: var(--glass-bg-heavy);
+  backdrop-filter: blur(var(--glass-blur-heavy));
+  -webkit-backdrop-filter: blur(var(--glass-blur-heavy));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius-sm);
+  box-shadow: var(--glass-shadow-elevated);
   z-index: 300;
   display: flex;
   flex-direction: column;
@@ -298,7 +303,7 @@ watch(() => props.activeCategory, () => {
   font-size: 0.75rem;
   padding: 2px 8px;
   border: none;
-  border-radius: 3px;
+  border-radius: var(--glass-radius-xs);
   background: none;
   color: var(--color-accent);
   cursor: pointer;
@@ -322,7 +327,7 @@ watch(() => props.activeCategory, () => {
   padding: 6px 12px;
   font-size: 0.85rem;
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background 0.15s;
 }
 
 .source-list li:hover {
@@ -352,12 +357,15 @@ watch(() => props.activeCategory, () => {
 .mark-all-btn {
   margin-left: auto;
   font-size: 0.8rem;
-  padding: 4px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  background: none;
+  padding: 6px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius-xs);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   color: var(--color-text-secondary);
   cursor: pointer;
+  transition: background 0.2s;
 }
 
 .mark-all-btn:hover {
@@ -375,16 +383,21 @@ watch(() => props.activeCategory, () => {
   width: 100%;
   padding: 12px;
   margin-top: 16px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: none;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius-sm);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   color: var(--color-text);
   cursor: pointer;
   font-size: 0.9rem;
+  transition: background 0.2s, box-shadow 0.2s;
+  box-shadow: var(--glass-shadow);
 }
 
 .load-more:hover {
   background: var(--color-hover);
+  box-shadow: var(--glass-shadow-elevated);
 }
 
 .feed-list.compact {

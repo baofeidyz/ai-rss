@@ -54,11 +54,7 @@ function absoluteTime(dateStr: string): string {
 
 function handleClick() {
   markAsRead(props.item.link)
-  if (props.readingMode) {
-    emit('select', props.item)
-  } else {
-    emit('select', props.item)
-  }
+  emit('select', props.item)
 }
 </script>
 
@@ -98,16 +94,20 @@ function handleClick() {
 <style scoped>
 .feed-item {
   padding: 16px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius-sm);
   margin-bottom: 12px;
   cursor: pointer;
-  transition: box-shadow 0.15s, border-color 0.15s;
+  transition: box-shadow 0.2s, border-color 0.2s, background 0.2s;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--glass-shadow);
 }
 
 .feed-item:hover {
-  border-color: var(--color-active);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 122, 255, 0.2);
+  box-shadow: var(--glass-shadow-elevated);
 }
 
 .feed-item.read {
@@ -118,8 +118,12 @@ function handleClick() {
   padding: 8px 12px;
   margin-bottom: 2px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--glass-radius-xs);
   border-left: 3px solid transparent;
+  box-shadow: none;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .feed-item.compact:hover {
@@ -162,8 +166,8 @@ function handleClick() {
   font-weight: 600;
   color: var(--color-accent);
   background: var(--color-accent-bg);
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: 2px 10px;
+  border-radius: 20px;
 }
 
 .time {
@@ -173,6 +177,7 @@ function handleClick() {
 
 .title {
   font-size: 1rem;
+  font-weight: 600;
   margin: 0 0 4px;
   line-height: 1.4;
   display: flex;

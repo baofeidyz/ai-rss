@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { useOverscrollPreview } from '../composables/useOverscrollPreview'
 
 interface FeedItemData {
   title: string
@@ -31,46 +30,20 @@ const viewMode = ref<'content' | 'iframe'>('content')
 const iframeLoading = ref(false)
 const iframeFailed = ref(false)
 
-// Mobile swipe hint
-const showSwipeHint = ref(false)
-const swipeHintTimer = ref<ReturnType<typeof setTimeout> | null>(null)
-
-// Refs for overscroll preview
-const scrollContainerRef = ref<HTMLElement | null>(null)
-const viewerBodyRef = ref<HTMLElement | null>(null)
+// Mobile detection
 const isMobileView = ref(false)
 
 function checkMobile() {
   isMobileView.value = window.innerWidth <= 768
 }
 
-// Adjacent articles for preview
+// Adjacent articles for mobile bottom bar preview
 const prevArticle = computed(() =>
   props.currentIndex > 0 ? props.articles[props.currentIndex - 1] : null
 )
 const nextArticle = computed(() =>
   props.currentIndex < props.articles.length - 1 ? props.articles[props.currentIndex + 1] : null
 )
-
-// Overscroll preview composable
-const overscrollDisabled = computed(() => viewMode.value === 'iframe' || !isMobileView.value)
-
-const {
-  overscrollReady,
-  direction: overscrollDirection,
-  contentStyle,
-  topPreviewStyle,
-  bottomPreviewStyle,
-  onTouchStart: overscrollTouchStart,
-  onTouchEnd: overscrollTouchEnd,
-} = useOverscrollPreview({
-  scrollContainerRef,
-  viewerBodyRef,
-  articles: computed(() => props.articles),
-  currentIndex: computed(() => props.currentIndex),
-  onNavigate: (index: number) => emit('navigate', index),
-  disabled: overscrollDisabled,
-})
 
 function updateNav() {
   hasPrev.value = props.currentIndex > 0
@@ -105,7 +78,25 @@ function loadOriginalPage() {
 }
 
 function handleIframeLoad() {
+  // Check if the iframe actually loaded content or was blocked
+  // The load event fires even for CORS-blocked pages, but the iframe may show error
   iframeLoading.value = false
+
+  // Try to detect if the iframe loaded successfully
+  try {
+    const iframe = document.querySelector('.viewer-iframe') as HTMLIFrameElement
+    if (iframe) {
+      // Try accessing contentDocument - this will throw for cross-origin
+      const doc = iframe.contentDocument || iframe.contentWindow?.document
+      // If we can access it and it has no body or empty body, it likely failed
+      if (doc && (!doc.body || doc.body.innerHTML === '')) {
+        iframeFailed.value = true
+      }
+    }
+  } catch {
+    // Cross-origin: we can't check, but the page might still render
+    // Keep iframeFailed as false - user sees the iframe content
+  }
 }
 
 function handleIframeError() {
@@ -125,27 +116,6 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
-// Iframe touch handlers (simple swipe, unchanged)
-const iframeTouchStartY = ref(0)
-const iframeTouchStartTime = ref(0)
-
-function handleIframeTouchStart(e: TouchEvent) {
-  iframeTouchStartY.value = e.touches[0].clientY
-  iframeTouchStartTime.value = Date.now()
-}
-
-function handleIframeTouchEnd(e: TouchEvent) {
-  const dy = e.changedTouches[0].clientY - iframeTouchStartY.value
-  const dt = Date.now() - iframeTouchStartTime.value
-  if (dt > 500 || Math.abs(dy) < 60) return
-
-  if (dy < 0 && hasNext.value) {
-    goNext()
-  } else if (dy > 0 && hasPrev.value) {
-    goPrev()
-  }
-}
-
 function formatDate(dateStr: string): string {
   if (!dateStr) return ''
   const date = new Date(dateStr)
@@ -157,66 +127,53 @@ onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
   window.addEventListener('resize', checkMobile)
   checkMobile()
-  // Show swipe hint on mobile
-  if (isMobileView.value && props.articles.length > 1) {
-    showSwipeHint.value = true
-    swipeHintTimer.value = setTimeout(() => {
-      showSwipeHint.value = false
-    }, 3000)
-  }
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('resize', checkMobile)
-  if (swipeHintTimer.value) {
-    clearTimeout(swipeHintTimer.value)
-  }
 })
 </script>
 
 <template>
   <div class="article-viewer">
     <div class="viewer-header">
-      <button class="back-btn" @click="$emit('close')">← 返回</button>
+      <button class="back-btn" @click="$emit('close')">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>返回</span>
+      </button>
       <div class="viewer-title-area">
         <span class="viewer-source">{{ article.source }}</span>
         <h2 class="viewer-title">{{ article.titleZh || article.title }}</h2>
       </div>
       <div class="viewer-actions">
-        <button class="nav-btn" :disabled="!hasPrev" @click="goPrev" title="上一篇 (↑)">▲</button>
+        <button class="nav-btn" :disabled="!hasPrev" @click="goPrev" title="上一篇 (↑)">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M3 9l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
         <span class="nav-pos">{{ currentIndex + 1 }}/{{ articles.length }}</span>
-        <button class="nav-btn" :disabled="!hasNext" @click="goNext" title="下一篇 (↓)">▼</button>
-        <a class="open-link" :href="article.link" target="_blank" rel="noopener">新窗口打开 ↗</a>
+        <button class="nav-btn" :disabled="!hasNext" @click="goNext" title="下一篇 (↓)">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <a class="open-link" :href="article.link" target="_blank" rel="noopener">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M5.5 2.5H3a.5.5 0 00-.5.5v8a.5.5 0 00.5.5h8a.5.5 0 00.5-.5V8.5M8.5 2.5h3v3M6 8l5.5-5.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>新窗口</span>
+        </a>
       </div>
     </div>
 
-    <div
-      ref="viewerBodyRef"
-      class="viewer-body"
-      @touchstart.passive="overscrollTouchStart"
-      @touchend="overscrollTouchEnd"
-    >
-      <!-- Previous article preview (top) -->
-      <div
-        v-if="prevArticle && isMobileView"
-        class="overscroll-preview overscroll-preview--top"
-        :style="topPreviewStyle"
-      >
-        <div class="overscroll-preview__label">上一篇</div>
-        <div class="overscroll-preview__source">{{ prevArticle.source }}</div>
-        <div class="overscroll-preview__title">{{ prevArticle.titleZh || prevArticle.title }}</div>
-        <div v-if="overscrollReady && overscrollDirection === 'prev'" class="overscroll-preview__hint">
-          释放以查看
-        </div>
-      </div>
-
+    <div class="viewer-body">
       <!-- Content mode: show RSS article summary -->
       <div
         v-if="viewMode === 'content'"
-        ref="scrollContainerRef"
         class="article-content"
-        :style="contentStyle"
       >
         <article class="article-detail">
           <h1 class="article-title">{{ article.title }}</h1>
@@ -235,7 +192,10 @@ onBeforeUnmount(() => {
           </div>
           <div class="article-actions">
             <a class="action-btn primary" :href="article.link" target="_blank" rel="noopener">
-              新窗口打开原文 ↗
+              新窗口打开原文
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="margin-left: 4px;">
+                <path d="M5.5 2.5H3a.5.5 0 00-.5.5v8a.5.5 0 00.5.5h8a.5.5 0 00.5-.5V8.5M8.5 2.5h3v3M6 8l5.5-5.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
             </a>
             <button class="action-btn" @click="loadOriginalPage">
               尝试加载原始页面
@@ -246,12 +206,22 @@ onBeforeUnmount(() => {
 
       <!-- Iframe mode: load original page -->
       <template v-if="viewMode === 'iframe'">
-        <div v-if="iframeLoading" class="iframe-loading">正在加载原始页面...</div>
+        <div v-if="iframeLoading && !iframeFailed" class="iframe-loading">
+          <div class="loading-spinner"></div>
+          <span>正在加载原始页面...</span>
+        </div>
         <div v-if="iframeFailed" class="iframe-failed">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+            <circle cx="24" cy="24" r="20" stroke="var(--color-text-secondary)" stroke-width="1.5" opacity="0.3"/>
+            <path d="M16 16l16 16M32 16L16 32" stroke="var(--color-text-secondary)" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
           <p>页面加载失败，该网站可能禁止了嵌入访问。</p>
-          <div class="article-actions">
+          <div class="article-actions center">
             <a class="action-btn primary" :href="article.link" target="_blank" rel="noopener">
-              新窗口打开 ↗
+              新窗口打开原文
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="margin-left: 4px;">
+                <path d="M5.5 2.5H3a.5.5 0 00-.5.5v8a.5.5 0 00.5.5h8a.5.5 0 00.5-.5V8.5M8.5 2.5h3v3M6 8l5.5-5.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
             </a>
             <button class="action-btn" @click="viewMode = 'content'">返回摘要</button>
           </div>
@@ -266,35 +236,26 @@ onBeforeUnmount(() => {
           @load="handleIframeLoad"
           @error="handleIframeError"
         />
-        <!-- Touch overlay for mobile swipe on top of iframe -->
-        <div
-          class="touch-overlay"
-          @touchstart.passive="handleIframeTouchStart"
-          @touchend="handleIframeTouchEnd"
-        />
       </template>
+    </div>
 
-      <!-- Next article preview (bottom) -->
-      <div
-        v-if="nextArticle && isMobileView"
-        class="overscroll-preview overscroll-preview--bottom"
-        :style="bottomPreviewStyle"
-      >
-        <div class="overscroll-preview__label">下一篇</div>
-        <div class="overscroll-preview__source">{{ nextArticle.source }}</div>
-        <div class="overscroll-preview__title">{{ nextArticle.titleZh || nextArticle.title }}</div>
-        <div v-if="overscrollReady && overscrollDirection === 'next'" class="overscroll-preview__hint">
-          释放以查看
-        </div>
-      </div>
-
-      <!-- Mobile swipe hint -->
-      <Transition name="hint-fade">
-        <div v-if="showSwipeHint" class="swipe-hint" @click="showSwipeHint = false">
-          <span class="swipe-hint-icon">&#8645;</span>
-          <span>上下滑动切换文章</span>
-        </div>
-      </Transition>
+    <!-- Mobile bottom navigation bar -->
+    <div v-if="isMobileView" class="mobile-nav-bar">
+      <button class="mobile-nav-btn" :disabled="!hasPrev" @click="goPrev">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M12 15l-5-5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span v-if="prevArticle" class="mobile-nav-label">{{ prevArticle.titleZh || prevArticle.title }}</span>
+        <span v-else class="mobile-nav-label">没有上一篇</span>
+      </button>
+      <span class="mobile-nav-pos">{{ currentIndex + 1 }} / {{ articles.length }}</span>
+      <button class="mobile-nav-btn mobile-nav-btn--next" :disabled="!hasNext" @click="goNext">
+        <span v-if="nextArticle" class="mobile-nav-label">{{ nextArticle.titleZh || nextArticle.title }}</span>
+        <span v-else class="mobile-nav-label">没有下一篇</span>
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M8 5l5 5-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
     </div>
   </div>
 </template>
@@ -313,21 +274,29 @@ onBeforeUnmount(() => {
   gap: 12px;
   padding: 8px 16px;
   border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   flex-shrink: 0;
   min-height: 44px;
 }
 
 .back-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 0.85rem;
-  padding: 4px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  background: none;
-  color: var(--color-text);
+  padding: 6px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius-xs);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  color: var(--color-accent);
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
+  transition: background 0.2s;
 }
 
 .back-btn:hover {
@@ -347,14 +316,15 @@ onBeforeUnmount(() => {
   font-weight: 600;
   color: var(--color-accent);
   background: var(--color-accent-bg);
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: 2px 10px;
+  border-radius: 20px;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .viewer-title {
   font-size: 0.9rem;
+  font-weight: 500;
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -369,13 +339,19 @@ onBeforeUnmount(() => {
 }
 
 .nav-btn {
-  font-size: 0.7rem;
-  padding: 2px 8px;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  background: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius-xs);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   color: var(--color-text);
   cursor: pointer;
+  transition: background 0.2s;
 }
 
 .nav-btn:hover:not(:disabled) {
@@ -391,16 +367,25 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
   color: var(--color-text-secondary);
   white-space: nowrap;
+  min-width: 40px;
+  text-align: center;
 }
 
 .open-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 0.8rem;
-  padding: 4px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
+  padding: 6px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius-xs);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   color: var(--color-accent);
   text-decoration: none;
   white-space: nowrap;
+  transition: background 0.2s;
 }
 
 .open-link:hover {
@@ -427,8 +412,10 @@ onBeforeUnmount(() => {
 
 .article-title {
   font-size: 1.5rem;
+  font-weight: 700;
   line-height: 1.4;
   margin: 0 0 8px;
+  letter-spacing: -0.02em;
 }
 
 .article-title-zh {
@@ -452,8 +439,8 @@ onBeforeUnmount(() => {
   font-weight: 600;
   color: var(--color-accent);
   background: var(--color-accent-bg);
-  padding: 2px 10px;
-  border-radius: 4px;
+  padding: 3px 12px;
+  border-radius: 20px;
 }
 
 .meta-date {
@@ -475,8 +462,11 @@ onBeforeUnmount(() => {
   color: var(--color-text-secondary);
   margin-bottom: 24px;
   padding: 16px;
-  background: var(--color-bg-secondary);
-  border-radius: 8px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius-sm);
   white-space: pre-line;
 }
 
@@ -486,30 +476,42 @@ onBeforeUnmount(() => {
   margin-top: 24px;
 }
 
+.article-actions.center {
+  justify-content: center;
+}
+
 .action-btn {
+  display: inline-flex;
+  align-items: center;
   font-size: 0.9rem;
-  padding: 8px 20px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: none;
+  padding: 10px 20px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius-sm);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   color: var(--color-text);
   cursor: pointer;
   text-decoration: none;
-  transition: background 0.15s;
+  transition: background 0.2s, box-shadow 0.2s;
+  box-shadow: var(--glass-shadow);
 }
 
 .action-btn:hover {
   background: var(--color-hover);
+  box-shadow: var(--glass-shadow-elevated);
 }
 
 .action-btn.primary {
   background: var(--color-accent);
   color: #fff;
   border-color: var(--color-accent);
+  box-shadow: 0 2px 12px rgba(0, 122, 255, 0.2);
 }
 
 .action-btn.primary:hover {
   opacity: 0.9;
+  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.3);
 }
 
 /* Iframe mode */
@@ -524,8 +526,25 @@ onBeforeUnmount(() => {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
   font-size: 0.95rem;
   color: var(--color-text-secondary);
+}
+
+.loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 2.5px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .iframe-failed {
@@ -535,49 +554,26 @@ onBeforeUnmount(() => {
   transform: translate(-50%, -50%);
   text-align: center;
   color: var(--color-text-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
 }
 
 .iframe-failed p {
-  margin-bottom: 16px;
+  margin: 0;
 }
 
-.iframe-failed .article-actions {
-  justify-content: center;
-}
-
-.touch-overlay {
+/* Mobile bottom navigation bar */
+.mobile-nav-bar {
   display: none;
-}
-
-/* Overscroll preview cards (hidden on desktop) */
-.overscroll-preview {
-  display: none;
-}
-
-/* Swipe hint toast */
-.swipe-hint {
-  display: none;
-}
-
-.hint-fade-enter-active {
-  transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-.hint-fade-leave-active {
-  transition: opacity 0.5s ease, transform 0.5s ease;
-}
-
-.hint-fade-enter-from {
-  opacity: 0;
-  transform: translate(-50%, 10px);
-}
-
-.hint-fade-leave-to {
-  opacity: 0;
-  transform: translate(-50%, 10px);
 }
 
 @media (max-width: 768px) {
+  .article-viewer {
+    height: calc(100vh - 53px);
+  }
+
   .viewer-header {
     flex-wrap: wrap;
     gap: 8px;
@@ -600,7 +596,7 @@ onBeforeUnmount(() => {
 
   .article-content {
     padding: 20px 16px;
-    overscroll-behavior: none;
+    padding-bottom: 80px;
   }
 
   .article-title {
@@ -611,16 +607,7 @@ onBeforeUnmount(() => {
     font-size: 1rem;
   }
 
-  .touch-overlay {
-    display: block;
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 40px;
-    z-index: 10;
-  }
-
+  /* Hide desktop nav controls on mobile */
   .nav-btn {
     display: none;
   }
@@ -629,105 +616,84 @@ onBeforeUnmount(() => {
     display: none;
   }
 
-  /* Overscroll preview cards */
-  .overscroll-preview {
-    display: block;
-    position: absolute;
-    left: 0;
-    right: 0;
-    padding: 20px 16px;
-    background: var(--color-bg-secondary);
-    z-index: 5;
-    pointer-events: none;
-    will-change: transform, opacity;
-  }
-
-  .overscroll-preview--top {
-    top: 0;
-    border-bottom: 1px solid var(--color-border);
-    border-radius: 0 0 12px 12px;
-  }
-
-  .overscroll-preview--bottom {
-    bottom: 0;
-    border-top: 1px solid var(--color-border);
-    border-radius: 12px 12px 0 0;
-  }
-
-  .overscroll-preview__label {
-    font-size: 0.7rem;
-    color: var(--color-accent);
-    font-weight: 600;
-    margin-bottom: 6px;
-    letter-spacing: 0.05em;
-  }
-
-  .overscroll-preview__source {
-    font-size: 0.7rem;
-    color: var(--color-text-secondary);
-    margin-bottom: 4px;
-  }
-
-  .overscroll-preview__title {
-    font-size: 0.95rem;
-    font-weight: 500;
-    line-height: 1.4;
-    color: var(--color-text);
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .overscroll-preview__hint {
-    margin-top: 8px;
-    font-size: 0.75rem;
-    color: var(--color-accent);
-    text-align: center;
-    animation: hint-pop 0.25s cubic-bezier(0.68, -0.55, 0.265, 1.55) both;
-  }
-
-  @keyframes hint-pop {
-    from {
-      opacity: 0;
-      transform: scale(0.8);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-
-  .swipe-hint {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    position: absolute;
-    bottom: 40px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.75);
-    color: #fff;
-    padding: 10px 20px;
-    border-radius: 24px;
-    font-size: 0.85rem;
-    z-index: 20;
-    white-space: nowrap;
-    pointer-events: auto;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  }
-
-  .swipe-hint-icon {
-    font-size: 1.2rem;
-    line-height: 1;
-  }
-
   .article-actions {
     flex-direction: column;
   }
 
   .action-btn {
     text-align: center;
+    justify-content: center;
+  }
+
+  /* Mobile bottom navigation bar */
+  .mobile-nav-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--glass-bg-heavy);
+    backdrop-filter: blur(var(--glass-blur-heavy));
+    -webkit-backdrop-filter: blur(var(--glass-blur-heavy));
+    border-top: 1px solid var(--glass-border);
+    flex-shrink: 0;
+    min-height: 52px;
+  }
+
+  .mobile-nav-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--glass-radius-xs);
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    color: var(--color-accent);
+    cursor: pointer;
+    transition: background 0.2s;
+    min-width: 0;
+  }
+
+  .mobile-nav-btn:hover:not(:disabled) {
+    background: var(--color-hover);
+  }
+
+  .mobile-nav-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+
+  .mobile-nav-btn svg {
+    flex-shrink: 0;
+  }
+
+  .mobile-nav-btn--next {
+    justify-content: flex-end;
+    text-align: right;
+  }
+
+  .mobile-nav-label {
+    font-size: 0.75rem;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  .mobile-nav-pos {
+    font-size: 0.7rem;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* Adjust viewer body height to account for bottom bar */
+  .viewer-body {
+    flex: 1;
+    min-height: 0;
   }
 }
 </style>

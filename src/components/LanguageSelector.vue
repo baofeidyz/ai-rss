@@ -15,11 +15,18 @@ const { targetLang, setLanguage } = useTranslate()
 <style scoped>
 .lang-select {
   font-size: 0.8rem;
-  padding: 4px 8px;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  background: var(--color-bg);
+  padding: 6px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius-xs);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   color: var(--color-text);
   cursor: pointer;
+  transition: background 0.2s;
+}
+
+.lang-select:hover {
+  background: var(--color-hover);
 }
 </style>
