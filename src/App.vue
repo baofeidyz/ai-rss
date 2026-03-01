@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import CategoryFilter from './components/CategoryFilter.vue'
 import FeedList from './components/FeedList.vue'
 import LanguageSelector from './components/LanguageSelector.vue'
@@ -40,6 +40,7 @@ const articleList = ref<FeedItem[]>([])
 const articleIndex = ref(0)
 
 onMounted(async () => {
+  window.addEventListener('popstate', onPopState)
   try {
     const res = await fetch('/feed-data/all-feeds.json')
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -49,6 +50,10 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('popstate', onPopState)
 })
 
 function toggleSidebar() {
@@ -61,6 +66,7 @@ function handleSelectArticle(item: FeedItem, index: number, list: FeedItem[]) {
   articleIndex.value = index
   readingMode.value = true
   sidebarOpen.value = false
+  history.pushState({ reading: true }, '')
 }
 
 function handleNavigate(index: number) {
@@ -69,8 +75,16 @@ function handleNavigate(index: number) {
 }
 
 function exitReadingMode() {
-  readingMode.value = false
-  selectedArticle.value = null
+  if (readingMode.value) {
+    history.back()
+  }
+}
+
+function onPopState() {
+  if (readingMode.value) {
+    readingMode.value = false
+    selectedArticle.value = null
+  }
 }
 </script>
 

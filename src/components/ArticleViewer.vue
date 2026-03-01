@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useOverscrollPreview } from '../composables/useOverscrollPreview'
 
 interface FeedItemData {
   title: string
@@ -24,8 +25,6 @@ const emit = defineEmits<{
 
 const hasPrev = ref(false)
 const hasNext = ref(false)
-const touchStartY = ref(0)
-const touchStartTime = ref(0)
 
 // View mode: 'content' (RSS summary) or 'iframe' (original page)
 const viewMode = ref<'content' | 'iframe'>('content')
@@ -36,9 +35,42 @@ const iframeFailed = ref(false)
 const showSwipeHint = ref(false)
 const swipeHintTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 
-function isMobile() {
-  return window.innerWidth <= 768
+// Refs for overscroll preview
+const scrollContainerRef = ref<HTMLElement | null>(null)
+const viewerBodyRef = ref<HTMLElement | null>(null)
+const isMobileView = ref(false)
+
+function checkMobile() {
+  isMobileView.value = window.innerWidth <= 768
 }
+
+// Adjacent articles for preview
+const prevArticle = computed(() =>
+  props.currentIndex > 0 ? props.articles[props.currentIndex - 1] : null
+)
+const nextArticle = computed(() =>
+  props.currentIndex < props.articles.length - 1 ? props.articles[props.currentIndex + 1] : null
+)
+
+// Overscroll preview composable
+const overscrollDisabled = computed(() => viewMode.value === 'iframe' || !isMobileView.value)
+
+const {
+  overscrollReady,
+  direction: overscrollDirection,
+  contentStyle,
+  topPreviewStyle,
+  bottomPreviewStyle,
+  onTouchStart: overscrollTouchStart,
+  onTouchEnd: overscrollTouchEnd,
+} = useOverscrollPreview({
+  scrollContainerRef,
+  viewerBodyRef,
+  articles: computed(() => props.articles),
+  currentIndex: computed(() => props.currentIndex),
+  onNavigate: (index: number) => emit('navigate', index),
+  disabled: overscrollDisabled,
+})
 
 function updateNav() {
   hasPrev.value = props.currentIndex > 0
@@ -93,14 +125,18 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
-function handleTouchStart(e: TouchEvent) {
-  touchStartY.value = e.touches[0].clientY
-  touchStartTime.value = Date.now()
+// Iframe touch handlers (simple swipe, unchanged)
+const iframeTouchStartY = ref(0)
+const iframeTouchStartTime = ref(0)
+
+function handleIframeTouchStart(e: TouchEvent) {
+  iframeTouchStartY.value = e.touches[0].clientY
+  iframeTouchStartTime.value = Date.now()
 }
 
-function handleTouchEnd(e: TouchEvent) {
-  const dy = e.changedTouches[0].clientY - touchStartY.value
-  const dt = Date.now() - touchStartTime.value
+function handleIframeTouchEnd(e: TouchEvent) {
+  const dy = e.changedTouches[0].clientY - iframeTouchStartY.value
+  const dt = Date.now() - iframeTouchStartTime.value
   if (dt > 500 || Math.abs(dy) < 60) return
 
   if (dy < 0 && hasNext.value) {
@@ -119,8 +155,10 @@ function formatDate(dateStr: string): string {
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
+  window.addEventListener('resize', checkMobile)
+  checkMobile()
   // Show swipe hint on mobile
-  if (isMobile() && props.articles.length > 1) {
+  if (isMobileView.value && props.articles.length > 1) {
     showSwipeHint.value = true
     swipeHintTimer.value = setTimeout(() => {
       showSwipeHint.value = false
@@ -130,6 +168,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown)
+  window.removeEventListener('resize', checkMobile)
   if (swipeHintTimer.value) {
     clearTimeout(swipeHintTimer.value)
   }
@@ -153,12 +192,32 @@ onBeforeUnmount(() => {
     </div>
 
     <div
+      ref="viewerBodyRef"
       class="viewer-body"
-      @touchstart.passive="handleTouchStart"
-      @touchend="handleTouchEnd"
+      @touchstart.passive="overscrollTouchStart"
+      @touchend="overscrollTouchEnd"
     >
+      <!-- Previous article preview (top) -->
+      <div
+        v-if="prevArticle && isMobileView"
+        class="overscroll-preview overscroll-preview--top"
+        :style="topPreviewStyle"
+      >
+        <div class="overscroll-preview__label">上一篇</div>
+        <div class="overscroll-preview__source">{{ prevArticle.source }}</div>
+        <div class="overscroll-preview__title">{{ prevArticle.titleZh || prevArticle.title }}</div>
+        <div v-if="overscrollReady && overscrollDirection === 'prev'" class="overscroll-preview__hint">
+          释放以查看
+        </div>
+      </div>
+
       <!-- Content mode: show RSS article summary -->
-      <div v-if="viewMode === 'content'" class="article-content">
+      <div
+        v-if="viewMode === 'content'"
+        ref="scrollContainerRef"
+        class="article-content"
+        :style="contentStyle"
+      >
         <article class="article-detail">
           <h1 class="article-title">{{ article.title }}</h1>
           <p v-if="article.titleZh && article.titleZh !== article.title" class="article-title-zh">
@@ -210,10 +269,24 @@ onBeforeUnmount(() => {
         <!-- Touch overlay for mobile swipe on top of iframe -->
         <div
           class="touch-overlay"
-          @touchstart.passive="handleTouchStart"
-          @touchend="handleTouchEnd"
+          @touchstart.passive="handleIframeTouchStart"
+          @touchend="handleIframeTouchEnd"
         />
       </template>
+
+      <!-- Next article preview (bottom) -->
+      <div
+        v-if="nextArticle && isMobileView"
+        class="overscroll-preview overscroll-preview--bottom"
+        :style="bottomPreviewStyle"
+      >
+        <div class="overscroll-preview__label">下一篇</div>
+        <div class="overscroll-preview__source">{{ nextArticle.source }}</div>
+        <div class="overscroll-preview__title">{{ nextArticle.titleZh || nextArticle.title }}</div>
+        <div v-if="overscrollReady && overscrollDirection === 'next'" class="overscroll-preview__hint">
+          释放以查看
+        </div>
+      </div>
 
       <!-- Mobile swipe hint -->
       <Transition name="hint-fade">
@@ -476,6 +549,11 @@ onBeforeUnmount(() => {
   display: none;
 }
 
+/* Overscroll preview cards (hidden on desktop) */
+.overscroll-preview {
+  display: none;
+}
+
 /* Swipe hint toast */
 .swipe-hint {
   display: none;
@@ -522,6 +600,7 @@ onBeforeUnmount(() => {
 
   .article-content {
     padding: 20px 16px;
+    overscroll-behavior: none;
   }
 
   .article-title {
@@ -548,6 +627,75 @@ onBeforeUnmount(() => {
 
   .nav-pos {
     display: none;
+  }
+
+  /* Overscroll preview cards */
+  .overscroll-preview {
+    display: block;
+    position: absolute;
+    left: 0;
+    right: 0;
+    padding: 20px 16px;
+    background: var(--color-bg-secondary);
+    z-index: 5;
+    pointer-events: none;
+    will-change: transform, opacity;
+  }
+
+  .overscroll-preview--top {
+    top: 0;
+    border-bottom: 1px solid var(--color-border);
+    border-radius: 0 0 12px 12px;
+  }
+
+  .overscroll-preview--bottom {
+    bottom: 0;
+    border-top: 1px solid var(--color-border);
+    border-radius: 12px 12px 0 0;
+  }
+
+  .overscroll-preview__label {
+    font-size: 0.7rem;
+    color: var(--color-accent);
+    font-weight: 600;
+    margin-bottom: 6px;
+    letter-spacing: 0.05em;
+  }
+
+  .overscroll-preview__source {
+    font-size: 0.7rem;
+    color: var(--color-text-secondary);
+    margin-bottom: 4px;
+  }
+
+  .overscroll-preview__title {
+    font-size: 0.95rem;
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--color-text);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .overscroll-preview__hint {
+    margin-top: 8px;
+    font-size: 0.75rem;
+    color: var(--color-accent);
+    text-align: center;
+    animation: hint-pop 0.25s cubic-bezier(0.68, -0.55, 0.265, 1.55) both;
+  }
+
+  @keyframes hint-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
 
   .swipe-hint {
