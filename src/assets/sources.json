@@ -1,6 +1,17 @@
 {
   "categories": [
     {
+      "name": "《AI工程大模型应用开发实战》",
+      "key": "ai_engineering_building_applications_with_foundation_models",
+      "description": "来自《AI工程大模型应用开发实战》人民邮电出版社的译者宝玉",
+      "sources":[
+        {
+          "name": "宝玉",
+          "url": "https://s.baoyu.io/feed.xml"
+        }
+      ]
+    },
+    {
       "name": "AI, ML, Big Data News",
       "key": "ai_ml_big_data_news",
       "description": "News and articles about AI, Machine Learning, and Big Data",
